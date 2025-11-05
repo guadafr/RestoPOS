@@ -1,13 +1,14 @@
 {
   "name": "restopos",
   "version": "1.0.0",
-  "main": "main.js",
-  "private": true,
+  "description": "Servidor RestoPOS",
+  "main": "server.js",
   "scripts": {
-    "start": "electron ."
+    "start": "node server.js"
   },
-  "devDependencies": {
-    "electron": "^31.0.0",
-    "electron-packager": "^17.1.2"
+  "dependencies": {
+    "express": "^4.19.2",
+    "cors": "^2.8.5",
+    "fs-extra": "^11.2.0"
   }
 }
