@@ -1,0 +1,45 @@
+<!doctype html><html><head><meta charset="utf-8">
+<style>
+@page{ size: 80mm auto; margin: 5mm }
+body{ font: 12px/1.4 -apple-system, Segoe UI, Roboto, Arial }
+h3{ margin:0 0 6px 0; text-align:center }
+table{ width:100%; border-collapse:collapse }
+td{ padding:2px 0; }
+.right{ text-align:right }
+hr{ border:none; border-top:1px dashed #999; margin:6px 0 }
+.muted{ color:#666; font-size:11px; text-align:center }
+</style></head><body>
+<h3>RestoPOS</h3>
+<div class="muted">Ticket no fiscal</div>
+<div id="meta"></div>
+<hr>
+<table id="tbl"></table>
+<hr>
+<table>
+  <tr><td class="right">Subtotal</td><td class="right" id="sub"></td></tr>
+  <tr id="rowDesc" style="display:none"><td class="right">Descuento</td><td class="right" id="desc"></td></tr>
+  <tr><td class="right"><b>Total</b></td><td class="right" id="tot"></td></tr>
+  <tr><td colspan="2" id="pago"></td></tr>
+</table>
+<div class="muted" id="ts"></div>
+<script>
+function money(n){ return '$ ' + (n/100).toFixed(2); }
+(function(){
+  const o = JSON.parse(decodeURIComponent(location.hash.slice(1)||'{}'));
+  document.getElementById('meta').textContent = `Tipo: ${o.tipo} · Mesa: ${o.mesa ?? '-'} · Mozo: ${o.mozo || '-'}`;
+  const tb = document.getElementById('tbl');
+  tb.innerHTML = (o.items||[]).map(it => 
+    `<tr><td>${it.cant} x ${it.nombre}</td><td class="right">${money(it.precio*it.cant)}</td></tr>`
+  ).join('');
+  const sub = (o.total||0);
+  const dsc = (o.descuento||0);
+  const net = Math.max(0, sub - dsc);
+  document.getElementById('sub').textContent = money(sub);
+  if (dsc>0){ document.getElementById('rowDesc').style.display=''; document.getElementById('desc').textContent=money(dsc); }
+  document.getElementById('tot').textContent = money(net);
+  const pagos = o.pagos || (o.pago ? [o.pago] : []);
+  document.getElementById('pago').textContent = 'Pago: ' + pagos.map(p=> (p.tipo||'-') + (p.obs?(' · '+p.obs):'')).join(' + ');
+  document.getElementById('ts').textContent = new Date(o.cierre || o.inicio || Date.now()).toLocaleString();
+})();
+</script>
+</body></html>

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title> Cocina</title>
+<style>
+  body{margin:0;background:#0b111b;color:#e8eef7;font-family:system-ui,-apple-system,Segoe UI,Roboto}
+  header{display:flex;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid #223049;background:#0f1522}
+  h1{font-size:18px;margin:0}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;padding:14px}
+  .card{background:#19253a;border:1px solid #2b3b59;border-radius:14px;padding:12px;min-height:140px;display:flex;flex-direction:column}
+  .meta{font-size:12px;color:#9fb2ce;margin-bottom:4px}
+  .items{flex:1;overflow:auto}
+  .chip{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;margin-right:6px}
+  .p{background:#374e7a} .e{background:#7a6137} .l{background:#2e7a37} .g{background:#7a2e2e}
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  button{background:#223049;border:1px solid #2b3b59;color:#e8eef7;padding:6px 10px;border-radius:8px;cursor:pointer}
+  @media (max-width:1100px){ .grid{grid-template-columns:repeat(2,1fr)} }
+  @media (max-width:700px){ .grid{grid-template-columns:1fr} }
+</style></head>
+<body>
+<header><h1>Pedidos de Cocina</h1><div style="margin-left:auto"><button onclick="location.href='index.html'">Salir</button></div></header>
+<main class="grid" id="grid"></main>
+<script>
+const DB_NAME='restoDBv23', DB_VER=1; let db;
+function openDB(){ return new Promise((res,rej)=>{ const r=indexedDB.open(DB_NAME,DB_VER);
+  r.onupgradeneeded=e=>{ const d=e.target.result;
+    if(!d.objectStoreNames.contains('orders')){ const os=d.createObjectStore('orders',{keyPath:'id',autoIncrement:true}); os.createIndex('byStatus','estado'); os.createIndex('byDate','fecha'); }
+  }; r.onsuccess=()=>{db=r.result; res()}; r.onerror=()=>rej(r.error); });}
+function tx(s,m='readonly'){return db.transaction(s,m).objectStore(s)}
+function getAll(s){return new Promise((res,rej)=>{const rq=tx(s).getAll(); rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error)})}
+function put(s,v){return new Promise((res,rej)=>{const rq=tx(s,'readwrite').put(v); rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error)})}
+function badge(w){ if(w==='pendiente')return 'p'; if(w==='en_preparacion')return 'e'; if(w==='listo')return 'l'; if(w==='entregado')return 'g'; return 'p'; }
+function render(items){
+  const g=document.getElementById('grid'); g.innerHTML='';
+  items.forEach(o=>{
+    const card=document.createElement('div'); card.className='card';
+    card.innerHTML = `
+      <div class="meta"><span class="chip ${badge(o.workflow)}">${(o.workflow||'pendiente').replace('_',' ')}</span> · Mesa ${o.mesa??'-'} · ${o.tipo} · ${o.mozo||'-'}</div>
+      <div class="items">${o.items.map(it=> `<div>${it.cant} x ${it.nombre}</div>`).join('')}</div>
+      <div class="row">
+        <button data-act="prep">En preparación</button>
+        <button data-act="listo">Listo</button>
+        <button data-act="entregado">Entregado</button>
+      </div>`;
+    card.querySelectorAll('[data-act]').forEach(b=> b.onclick=async ()=>{
+      const act=b.dataset.act;
+      o.workflow = (act==='prep'?'en_preparacion':act);
+      await put('orders', o);
+      tick(); // refrescar
+    });
+    g.appendChild(card);
+  });
+}
+async function tick(){
+  const all=await getAll('orders');
+  const abiertos = all.filter(o=> o.estado==='abierto').sort((a,b)=> new Date(a.inicio)-new Date(b.inicio));
+  render(abiertos);
+}
+(async function(){ await openDB(); tick(); setInterval(tick, 4000); })();
+
+if ('serviceWorker' in navigator) {
+  (async () => {
+    try {
+      const EXPECTED = 'sw-v235.js';
+      const regs = await navigator.serviceWorker.getRegistrations();
+      const ok = regs.some(r => r.active?.scriptURL.includes(EXPECTED));
+      if (!ok) {
+        // desregistro los anteriores UNA SOLA VEZ
+        await Promise.all(regs.map(r => r.unregister()));
+        await navigator.serviceWorker.register(EXPECTED, { scope: './' });
+        console.log('SW listo:', EXPECTED);
+      }
+    } catch (e) {
+      console.warn('SW no disponible:', e);
+    }
+  })();
+}
+
+
+
+
+</script>
+</body></html>

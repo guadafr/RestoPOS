@@ -1,0 +1,25 @@
+<!doctype html><html><head><meta charset="utf-8">
+<style>
+@page{ size: 80mm auto; margin: 5mm }
+body{ font: 12px/1.4 -apple-system, Segoe UI, Roboto, Arial }
+h3{ margin:0 0 6px 0 }
+.row{ margin:4px 0 }
+hr{ border:none; border-top:1px dashed #999; margin:6px 0 }
+</style></head><body>
+<h3>COMANDA</h3>
+<div class="row" id="meta"></div>
+<hr>
+<div id="items"></div>
+<hr>
+<div id="ts"></div>
+<script>
+(function(){
+  const data = JSON.parse(decodeURIComponent(location.hash.slice(1)||'{}'));
+  document.getElementById('meta').textContent =
+    `Mesa: ${data.mesa ?? '-'} · Mozo: ${data.mozo || '-'}`;
+  document.getElementById('items').innerHTML =
+    (data.items||[]).map(it=>`<div>${it.cant} x ${it.nombre}</div>`).join('');
+  document.getElementById('ts').textContent = new Date().toLocaleString();
+})();
+</script>
+</body></html>

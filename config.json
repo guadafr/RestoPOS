@@ -1,0 +1,7 @@
+{
+  "restaurantName": "Mi Restaurante",
+  "adminPin": "1234",
+  "tables": 20,
+  "autoPrintKitchenOnSave": true,
+  "autoPrintKitchenOnCharge": true
+}

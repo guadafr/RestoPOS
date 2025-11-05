@@ -1,0 +1,11 @@
+{
+  "products": [],
+  "mozos": [],
+  "orders": [],
+  "cash": [],
+  "config": {
+    "restaurantName": "Mi Restaurante",
+    "adminPin": "1234",
+    "tables": 20
+  }
+}

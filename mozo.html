@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title> Mozo</title>
+<link rel="manifest" href="manifest.json">
+<style>
+  body{margin:0;background:#0e1420;color:#e8eef7;font-family:system-ui,-apple-system,Segoe UI,Roboto}
+  header{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #223049;background:#0f1522}
+  h1{font-size:16px;margin:0 8px 0 0}
+  .tabs{display:flex;gap:8px}
+  .tab{border:none;border-radius:8px;padding:8px 12px;background:#223049;border:1px solid #2b3b59;color:#e8eef7;cursor:pointer}
+  .tab.active{background:#2a3a5a}
+  .toolbar{margin-left:auto}
+  .btn{background:#223049;border:1px solid #2b3b59;color:#e8eef7;padding:8px 12px;border-radius:8px;cursor:pointer}
+  .btn.danger{background:#7a2e2e;border-color:#a33}
+  main{padding:14px;max-width:1200px;margin:0 auto}
+  .grid{display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:10px}
+  @media (max-width:900px){ .grid{grid-template-columns:repeat(2,minmax(160px,1fr));} }
+  .tile{border:1px solid #2b3b59;border-radius:12px;padding:10px;cursor:pointer;background:#162036}
+  .tile.free{opacity:.7}
+  .pill{background:#2a3a5a;border-radius:999px;padding:2px 8px;font-size:12px}
+  .panel{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media (max-width:900px){ .panel{grid-template-columns:1fr} }
+  ul{list-style:none;margin:0;padding:0}
+  li{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #223049;padding:8px 0}
+  table{width:100%;border-collapse:collapse}
+  th,td{padding:6px;border-bottom:1px solid #223049;text-align:left}
+  .right{text-align:right}
+  .muted{color:#9fb2ce}
+  dialog{border:none;border-radius:16px;max-width:900px;width:clamp(320px,95vw,900px);background:#0f1929;color:#e8eef7;padding:0}
+  dialog::backdrop{background:rgba(0,0,0,.55)}
+  .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:12px;flex-wrap:wrap}
+</style>
+</head>
+<body>
+<header>
+  <h1>Mozo</h1>
+  <div class="tabs">
+    <button class="tab active" data-v="SALON">Salón</button>
+    <button class="tab" data-v="LLEVAR">Para llevar</button>
+  </div>
+  <div class="toolbar">
+    <button class="btn" id="btnVentaRapida">Venta rápida</button>
+    <button class="btn" id="btnSalir">Salir</button>
+  </div>
+</header>
+
+<main>
+  <div id="grid" class="grid"></div>
+</main>
+
+<!-- Dialog pedido -->
+<dialog id="dlgPedido">
+  <div style="padding:10px 12px;border-bottom:1px solid #223049;display:flex;justify-content:space-between;align-items:center">
+    <b id="tituloPedido">Pedido</b>
+    <div class="muted" id="pedidoMeta">—</div>
+  </div>
+  <div style="padding:10px 12px" class="panel">
+    <div>
+      <h3>Menú</h3>
+      <ul id="listaMenu"></ul>
+    </div>
+    <div>
+      <h3>Pedido</h3>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+        <label>Mozo <select id="selMozo" style="min-width:140px"></select></label>
+        <label>Estado
+          <select id="selWorkflow">
+            <option value="pendiente">Pendiente</option>
+            <option value="enprep">En preparación</option>
+            <option value="listo">Listo</option>
+            <option value="entregado">Entregado</option>
+          </select>
+        </label>
+      </div>
+      <table id="tblPedido">
+        <thead><tr><th>Item</th><th>Cant</th><th class="right">P. Unit</th><th class="right">Subt.</th><th></th></tr></thead>
+        <tbody></tbody>
+        <tfoot><tr><td colspan="3" class="right">Total</td><td id="pedidoTotal" class="right">$ 0.00</td><td></td></tr></tfoot>
+      </table>
+      <div class="actions">
+        <button class="btn" id="btnCocina">Imprimir cocina</button>
+        <button class="btn" id="btnGuardar">Guardar</button>
+        <button class="btn" id="btnCobrar">Cobrar</button>
+        <button class="btn danger" id="btnCancelar">Cancelar pedido</button>
+        <button class="btn" id="cerrarPedido">✕</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- Dialog cobro (multi-medios) -->
+<dialog id="dlgCobro">
+  <div style="padding:10px 12px;border-bottom:1px solid #223049"><b>Cobro</b></div>
+  <div style="padding:10px 12px">
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:end">
+      <label>Descuento ($ centavos) <input id="pagoDesc" type="number" min="0" value="0"></label>
+      <button class="btn" id="addPago">Agregar medio</button>
+      <div class="muted" id="pagoResumen" style="margin-left:auto"></div>
+    </div>
+    <table id="tblPagos">
+      <thead><tr><th>Medio</th><th>Obs</th><th>Monto ($)</th><th></th></tr></thead>
+      <tbody></tbody>
+    </table>
+    <div class="actions">
+      <button class="btn" id="pagoOk">Confirmar cobro</button>
+      <button class="btn" id="cobroCerrar">Cancelar</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+// === CONFIG merge ===
+let CONFIG = { restaurantName:'Mi Restaurante', adminPin:'1234', tables:20, autoPrintKitchenOnSave:false, autoPrintKitchenOnCharge:true };
+async function loadConfigMerged(){
+  try{ const cfgJSON = await fetch('config.json',{cache:'no-store'}).then(r=>r.ok?r.json():Promise.reject()); Object.assign(CONFIG, cfgJSON||{}); }catch{}
+  try{ const cfgLocal = JSON.parse(localStorage.getItem('restopos_config')||'{}'); Object.assign(CONFIG, cfgLocal||{}); }catch{}
+}
+
+// === DB helpers ===
+const DB_NAME='restoDBv23', DB_VER=1; let db;
+function openDB(){ return new Promise((res,rej)=>{ const req=indexedDB.open(DB_NAME,DB_VER);
+  req.onupgradeneeded=e=>{ const db=e.target.result;
+    if(!db.objectStoreNames.contains('orders')){ const os=db.createObjectStore('orders',{keyPath:'id',autoIncrement:true}); os.createIndex('byStatus','estado'); os.createIndex('byDate','fecha'); }
+    if(!db.objectStoreNames.contains('products')) db.createObjectStore('products',{keyPath:'id'});
+    if(!db.objectStoreNames.contains('cash')) db.createObjectStore('cash',{keyPath:'id',autoIncrement:true});
+    if(!db.objectStoreNames.contains('mozos')) db.createObjectStore('mozos',{keyPath:'id'});
+  }; req.onsuccess=()=>{db=req.result; res()}; req.onerror=()=>rej(req.error); });}
+function tx(s,m='readonly'){return db.transaction(s,m).objectStore(s)}
+function put(s,v){return new Promise((res,rej)=>{const r=tx(s,'readwrite').put(v); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error)})}
+function getAll(s){return new Promise((res,rej)=>{const r=tx(s).getAll(); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error)})}
+function get(s,id){return new Promise((res,rej)=>{const r=tx(s).get(id); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error)})}
+function del(s,id){return new Promise((res,rej)=>{const r=tx(s,'readwrite').delete(id); r.onsuccess=()=>res(); r.onerror=()=>rej(r.error)})}
+const $=s=>document.querySelector(s), $$=s=>Array.from(document.querySelectorAll(s));
+function money(n){return '$ '+(n/100).toFixed(2)} function today(){return new Date().toISOString().slice(0,10)} function nowISO(){return new Date().toISOString()}
+
+let currentView='SALON', currentOrder=null, MESAS=[];
+function buildMesas(n){ MESAS = Array.from({length:n}, (_,i)=>({numero:i+1})); }
+
+async function renderGrid(){
+  const open = (await getAll('orders')).filter(o=>o.estado==='abierto' && o.tipo===currentView);
+  const map = new Map(open.map(o=>[o.mesa,o]));
+  const grid=$("#grid"); grid.innerHTML='';
+  MESAS.forEach(m=>{
+    const o=map.get(m.numero);
+    const div=document.createElement('div'); div.className='tile '+(o?'':'free');
+    div.innerHTML=`<div style="display:flex;justify-content:space-between"><b>Mesa ${String(m.numero).padStart(2,'0')}</b><span class="pill">${currentView}</span></div>
+                   <div style="display:flex;justify-content:space-between"><span>${o? (o.mozo||'—'):'—'}</span><span>${o? money(o.total):'Libre'}</span></div>`;
+    div.onclick=()=>openOrder(m.numero,o||null);
+    grid.appendChild(div);
+  });
+}
+
+
+
+// --- Notificaciones cross-tab + del sistema ---
+const BC = new BroadcastChannel('restopos');
+function notifyAll(type, payload){
+  try{ BC.postMessage({type, payload, ts: Date.now()}); }catch(e){}
+  // Notificación del sistema
+  if (type==='pedido_listo') {
+    const title = 'Pedido listo';
+    const body  = `Mesa ${payload.mesa ?? '-'} · ${payload.mozo || '-'} (${payload.items?.length||0} ítems)`;
+    if (('Notification' in window)) {
+      if (Notification.permission === 'granted'){
+        registration?.showNotification?.(title, { body }) || new Notification(title, { body });
+      } else if (Notification.permission !== 'denied'){
+        Notification.requestPermission().then(p=>{
+          if (p==='granted'){
+            registration?.showNotification?.(title, { body }) || new Notification(title, { body });
+          }
+        });
+      }
+    }
+  }
+}
+// UI toast simple
+function toast(msg){
+  const d=document.createElement('div');
+  d.textContent=msg;
+  d.style.cssText='position:fixed;right:12px;bottom:12px;background:#1e293b;color:#e8eef7;padding:10px 12px;border:1px solid #2b3b59;border-radius:10px;z-index:99999';
+  document.body.appendChild(d); setTimeout(()=>d.remove(), 3500);
+}
+// Listener en cada pantalla (MOZO y ADMIN)
+BC.onmessage = (e)=>{
+  const {type, payload} = e.data||{};
+  if (type==='pedido_listo'){
+    toast(`✅ Pedido listo · Mesa ${payload.mesa ?? '-'} · ${payload.mozo || '-'}`);
+    // pitido suave
+    try{ new Audio('beep.mp3').play().catch(()=>{});}catch{}
+  }
+};
+
+
+
+
+async function renderMenu(){
+  const list=await getAll('products'); const ul=$("#listaMenu"); ul.innerHTML='';
+  list.forEach(p=>{
+    const li=document.createElement('li');
+    li.innerHTML=`
+      <div><b>${p.nombre}</b>
+        <div class="muted">${p.categoria||''} ${p.trackStock ? ('· stock '+(p.stock??0)) : ''}</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span>${money(p.precio)}</span>
+        <button class="btn" data-id="${p.id}">Agregar</button>
+      </div>`;
+    ul.appendChild(li);
+  });
+  $$('#listaMenu [data-id]').forEach(b=> b.onclick=async e=>{
+    const id=e.target.dataset.id;
+    const p = await get('products', id);
+    if (!p) return;
+
+    // Controlar stock solo si trackStock === true
+    if (p.trackStock) {
+      const enPedido = currentOrder.items.find(x=>x.id===id)?.cant || 0;
+      const disponible = (p.stock ?? 0);
+      if (disponible <= enPedido) {
+        return alert(`No hay stock suficiente de "${p.nombre}". Disponible: ${disponible}`);
+      }
+    }
+    const ex = currentOrder.items.find(x=>x.id===id);
+    if (ex) ex.cant++;
+    else currentOrder.items.push({id:p.id,nombre:p.nombre,precio:p.precio,cant:1});
+    await put('orders', currentOrder);
+    renderPedido();
+  });
+}
+
+function renderPedido(){
+  const tb=$("#tblPedido tbody"); tb.innerHTML='';
+  currentOrder.items.forEach((it,i)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${it.nombre}</td><td><input type="number" min="1" value="${it.cant}" data-i="${i}" style="width:64px"></td><td class="right">${money(it.precio)}</td><td class="right">${money(it.precio*it.cant)}</td><td><button class="btn" data-del="${i}">X</button></td>`;
+    tb.appendChild(tr);
+  });
+  currentOrder.total=currentOrder.items.reduce((a,b)=>a+b.precio*b.cant,0);
+  $("#pedidoTotal").textContent=money(currentOrder.total);
+  $$('input[type=number][data-i]').forEach(inp=> inp.onchange=async e=>{ const i=+e.target.dataset.i; currentOrder.items[i].cant=Math.max(1,+e.target.value||1); await put('orders', currentOrder); renderPedido(); renderGrid(); });
+  $$('[data-del]').forEach(btn=> btn.onclick=async e=>{ const i=+e.target.dataset.del; currentOrder.items.splice(i,1); await put('orders', currentOrder); renderPedido(); renderGrid(); });
+}
+
+async function loadMozos(){
+  const list=await getAll('mozos'); const sel=$("#selMozo"); sel.innerHTML='';
+  list.filter(m=>m.activo!==false).forEach(m=>{ const o=document.createElement('option'); o.value=m.nombre; o.textContent=m.nombre; sel.appendChild(o); });
+  if(!sel.value && sel.options.length){ sel.value=sel.options[0].value; }
+}
+
+async function openOrder(mesa, existing){
+  if(!existing){
+    currentOrder={ mesa, tipo:currentView, estado:'abierto', inicio:nowISO(), fecha:today(), items:[], total:0, mozo:'', workflow:'pendiente' };
+    currentOrder.id = await put('orders', currentOrder);
+  }else currentOrder=existing;
+  $('#tituloPedido').textContent = (mesa?`Mesa ${String(mesa).padStart(2,'0')}`:'Venta rápida')+' · '+currentView;
+  await loadMozos(); $("#selMozo").value=currentOrder.mozo||$("#selMozo").value||'';
+  $("#pedidoMeta").textContent='Abierto '+new Date(currentOrder.inicio).toLocaleTimeString();
+  await renderMenu(); renderPedido();
+  $("#dlgPedido").showModal();
+
+  // setear estado
+  document.getElementById('selWorkflow').value = currentOrder.workflow || 'pendiente';
+}
+
+$("#selMozo").onchange=async e=>{ currentOrder.mozo=e.target.value; await put('orders', currentOrder); renderGrid(); }
+
+$("#selWorkflow").onchange=async e=>{
+  currentOrder.workflow=e.target.value;
+  await put('orders', currentOrder);
+  renderGrid();
+  // 👇 Notificar cuando pasa a "listo"
+  if (currentOrder.workflow === 'listo'){
+    notifyAll('pedido_listo', {
+      id: currentOrder.id,
+      mesa: currentOrder.mesa,
+      mozo: currentOrder.mozo,
+      items: currentOrder.items
+    });
+  }
+};
+
+
+
+$("#cerrarPedido").onclick=()=>$("#dlgPedido").close();
+
+// Guardar = NO imprime
+$("#btnGuardar").onclick=async()=>{
+  await put('orders', currentOrder);
+  $("#dlgPedido").close(); renderGrid();
+};
+
+// Imprimir cocina a demanda
+$("#btnCocina").onclick=()=>{ if(!currentOrder || currentOrder.items.length===0) return alert('Pedido vacío'); printCocina(currentOrder); };
+
+// Cobro (abre modal)
+document.getElementById('btnCobrar').onclick = ()=>{
+  if (!currentOrder || currentOrder.items.length===0) return alert('Pedido vacío');
+  const total = currentOrder.items.reduce((a,b)=> a + b.precio*b.cant, 0);
+  renderTablaPagos([{ tipo:'Efectivo', obs:'', monto: total }]);
+  document.getElementById('pagoDesc').value = 0;
+  document.getElementById('dlgCobro').showModal();
+};
+
+document.getElementById('cobroCerrar').onclick = () => document.getElementById('dlgCobro').close();
+
+// Confirmar cobro (multi-medios + stock opcional)
+document.getElementById('pagoOk').onclick = async ()=>{
+  const prods = await getAll('products');
+  const desc  = Math.max(0, parseInt(document.getElementById('pagoDesc').value || '0'));
+  const total = currentOrder.items.reduce((a,b)=> a + b.precio*b.cant, 0);
+  const aCobrar = Math.max(0, total - desc);
+
+  const pagos = leerPagosDesdeTabla(); // [{tipo, obs, monto}]
+  const sumaPagos = pagos.reduce((a,p)=> a + p.monto, 0);
+  if (sumaPagos !== aCobrar) return alert(`La suma de pagos (${money(sumaPagos)}) debe igualar el total a cobrar (${money(aCobrar)}).`);
+
+  // Stock: sólo si trackStock
+  currentOrder.items.forEach(it=>{
+    const p = prods.find(x=>x.id===it.id);
+    if (p && p.trackStock) { p.stock = Math.max(0,(p.stock||0)-it.cant); put('products', p); }
+  });
+
+  // Guardar pedido cerrado
+  currentOrder.total = total;
+  currentOrder.descuento   = desc;
+  currentOrder.totalCobrado = aCobrar;
+  currentOrder.pagos = pagos;
+  currentOrder.estado = 'cerrado';
+  currentOrder.cierre = nowISO();
+
+  // Sumar a caja
+  // 👉 SUMAR A CAJA por cada medio (robusto)
+// 👉 SUMAR A CAJA y registrar movimiento
+const cajaOpen = await getOpenCashBox();
+if (!cajaOpen){
+  alert('⚠ No hay caja abierta. El cobro se registró, pero no se sumó a Caja.');
+} else {
+  // normalizar estructura
+  cajaOpen.ventasByPay  = Object.assign({efectivo:0,tarjeta:0,transferencia:0,qr:0,otros:0}, cajaOpen.ventasByPay||{});
+  cajaOpen.movs = cajaOpen.movs || [];
+
+  cajaOpen.ventasTotal  = (cajaOpen.ventasTotal||0) + aCobrar;
+
+  pagos.forEach(p=>{
+    const key = mapPagoKey(p.tipo);
+    cajaOpen.ventasByPay[key] = (cajaOpen.ventasByPay[key]||0) + (p.monto||0);
+    // 👇 Registrar un movimiento visible en la tabla
+    cajaOpen.movs.push({
+      ts: nowISO(),
+      tipo: 'venta',
+      medio: p.tipo,
+      desc: `Mesa ${currentOrder.mesa ?? '-'} · ${currentOrder.mozo || '-'}`,
+      monto: p.monto
+    });
+  });
+
+  currentOrder.boxId = cajaOpen.id;
+  await put('cash', cajaOpen);
+}
+
+
+  await put('orders', currentOrder);
+  if (CONFIG?.autoPrintKitchenOnCharge) printCocina(currentOrder);
+  printClienteAR(currentOrder);
+
+  document.getElementById('dlgCobro').close();
+  document.getElementById('dlgPedido').close();
+  renderGrid();
+};
+
+// Cancelar pedido (con rollback si estaba cobrado)
+document.getElementById('btnCancelar').onclick = async () => {
+  if (!currentOrder) return;
+  if (!confirm('¿Cancelar este pedido?')) return;
+  const reason = prompt('Motivo de cancelación (opcional):', '') || '';
+
+  const wasClosed = currentOrder.estado === 'cerrado';
+  if (wasClosed) {
+    try{
+      // Revertir caja
+      let caja = currentOrder.boxId ? await get('cash', currentOrder.boxId) : null;
+      if (!caja) caja = (await getAll('cash')).find(b => !b.cierre);
+      if (caja) {
+        const totalCobrado = (currentOrder.totalCobrado || currentOrder.total || 0);
+        caja.ventasTotal = Math.max(0, (caja.ventasTotal || 0) - totalCobrado);
+        const pagos = (currentOrder.pagos && currentOrder.pagos.length) ? currentOrder.pagos
+                      : (currentOrder.pago ? [{ tipo: currentOrder.pago.tipo, monto: totalCobrado }] : []);
+        caja.ventasByPay = Object.assign({efectivo:0,tarjeta:0,transferencia:0,qr:0,otros:0}, caja.ventasByPay||{});
+        pagos.forEach(p=>{ const key = mapPagoKey(p.tipo); caja.ventasByPay[key] = Math.max(0, (caja.ventasByPay[key]||0) - (p.monto||0)); });
+        await put('cash', caja);
+      }
+      // Devolver stock (solo track)
+      const prods = await getAll('products');
+      for (const it of currentOrder.items) {
+        const p = prods.find(x=>x.id===it.id);
+        if (p && p.trackStock) { p.stock = (p.stock||0) + it.cant; await put('products', p); }
+      }
+    }catch(e){ console.warn('Rollback cancelación:', e); }
+  }
+
+  currentOrder.estado = 'anulado';
+  currentOrder.cancelTs = nowISO();
+  currentOrder.cancelReason = reason;
+  await put('orders', currentOrder);
+
+  document.getElementById('dlgPedido').close();
+  await renderGrid();
+  alert('Pedido cancelado.');
+};
+
+// ---- Pago UI helpers ----
+function nuevaFilaPagoRow(pago={tipo:'Efectivo', obs:'', monto:0}){
+  const tr = document.createElement('tr');
+  tr.innerHTML = `
+    <td>
+      <select class="p-tipo">
+        <option>Efectivo</option><option>Tarjeta</option>
+        <option>Transferencia</option><option>QR</option>
+      </select>
+    </td>
+    <td><input class="p-obs" placeholder="Ej: Visa, QR MP, banco..."></td>
+    <td><input class="p-monto" type="number" min="0" value="${(pago.monto||0)/100}"></td>
+    <td><button class="btn p-del">X</button></td>`;
+  tr.querySelector('.p-tipo').value = pago.tipo || 'Efectivo';
+  tr.querySelector('.p-obs').value  = pago.obs  || '';
+  return tr;
+}
+function leerPagosDesdeTabla(){
+  const rows = Array.from(document.querySelectorAll('#tblPagos tbody tr'));
+  return rows.map(r => {
+    const tipo  = r.querySelector('.p-tipo').value;
+    const obs   = r.querySelector('.p-obs').value.trim();
+    const monto = Math.max(0, Math.round(parseFloat(r.querySelector('.p-monto').value || '0') * 100));
+    return { tipo, obs, monto };
+  });
+}
+function renderTablaPagos(pagos){
+  const tb = document.querySelector('#tblPagos tbody'); tb.innerHTML='';
+  pagos.forEach(p => tb.appendChild(nuevaFilaPagoRow(p)));
+  tb.querySelectorAll('.p-del').forEach(btn => { btn.onclick = (e)=> { e.target.closest('tr').remove(); actualizarResumenPagos(); }; });
+  tb.querySelectorAll('select,input').forEach(el => el.oninput = actualizarResumenPagos);
+  actualizarResumenPagos();
+}
+function actualizarResumenPagos(){
+  const desc = Math.max(0, parseInt(document.getElementById('pagoDesc').value || '0'));
+  const total = currentOrder.items.reduce((a,b)=> a + b.precio*b.cant, 0);
+  const aCobrar = Math.max(0, total - desc);
+  const pagos = leerPagosDesdeTabla();
+  const suma = pagos.reduce((a,p)=> a + p.monto, 0);
+  const diff = aCobrar - suma;
+  const el = document.getElementById('pagoResumen');
+  el.textContent = `Subtotal ${money(total)} - Desc ${money(desc)} = A cobrar ${money(aCobrar)} · Pagos ${money(suma)} · Dif ${money(diff)}`;
+}
+
+// ---- Print helpers ----
+function printCocina(o){
+  const w=window.open('','_blank','width=400,height=600');
+  const rows=o.items.map(it=>`<div>${it.cant} x ${it.nombre}</div>`).join('');
+  const fecha=new Date(o.cierre||o.inicio).toLocaleString();
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Comanda</title>
+  <style>@page{size:80mm auto;margin:5mm}body{font:12px/1.3 -apple-system,Segoe UI,Roboto,Arial}.muted{color:#666}</style></head><body>
+  <div>Mesa: ${o.mesa??'-'} · Mozo: ${o.mozo||'-'}</div>
+  <hr>${rows}<hr><div class="muted">${fecha}</div>
+  <script>window.print(); setTimeout(()=>window.close(), 300);<\/script>
+  </body></html>`); w.document.close();
+}
+function moneyFmt(n){ return '$ ' + (n/100).toFixed(2); }
+function printClienteAR(o){
+  const w = window.open('', '_blank', 'width=420,height=640');
+  const rows = o.items.map(it =>
+    `<tr><td>${it.cant} x ${it.nombre}</td><td class="right">${moneyFmt(it.precio)}</td><td class="right">${moneyFmt(it.precio*it.cant)}</td></tr>`
+  ).join('');
+  const fecha = new Date(o.cierre || o.inicio).toLocaleString();
+
+  fetch('config.json').then(r=>r.json()).then(cfg=>{
+    const name   = cfg.restaurantName || 'Mi Restaurante';
+    const header = cfg.receiptHeader || 'Ticket no fiscal';
+    const footer = cfg.receiptFooter || '';
+    const total  = o.total || 0;
+    const desc   = o.descuento || 0;
+    const neto   = Math.max(0, total - desc);
+    const pagoTxt = o.pagos?.length ? o.pagos.map(p=>`${p.tipo}${p.obs?(' '+p.obs):''} $${(p.monto/100).toFixed(2)}`).join(' / ')
+                   : (o.pago?.tipo || '—') + (o.pago?.obs ? (' · '+o.pago.obs) : '');
+
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Ticket</title>
+      <style>@page{size:80mm auto;margin:5mm}
+      body{font:12px/1.45 -apple-system,Segoe UI,Roboto,Arial}
+      h3{margin:0;text-align:center}
+      table{width:100%;border-collapse:collapse}
+      td,th{padding:2px 0;border-bottom:1px dashed #ccc}
+      .right{text-align:right}.muted{color:#666}</style></head><body>
+      <h3>${name}</h3>
+      <div class="muted" style="text-align:center">${header}</div>
+      <div class="muted">${fecha}</div>
+      <div>Tipo: ${o.tipo} · Mesa: ${o.mesa ?? '-' } · Mozo: ${o.mozo || '-'}</div>
+      <hr>
+      <table>
+        <thead><tr><th>Detalle</th><th class="right">P. Unit</th><th class="right">Importe</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+      <table>
+        <tr><td colspan="2" class="right">Subtotal</td><td class="right">${moneyFmt(total)}</td></tr>
+        ${desc ? `<tr><td colspan="2" class="right">Descuento</td><td class="right">- ${moneyFmt(desc)}</td></tr>` : ''}
+        <tr><td colspan="2" class="right"><b>Total</b></td><td class="right"><b>${moneyFmt(neto)}</b></td></tr>
+        <tr><td colspan="3">Pago: ${pagoTxt}</td></tr>
+      </table>
+      <div class="muted" style="text-align:center;margin-top:8px">${footer}</div>
+      <script>window.print(); setTimeout(()=>window.close(), 300);<\/script>
+      </body></html>`);
+    w.document.close();
+  }).catch(()=>{ try{ w.close(); }catch(e){} });
+}
+
+// ---- Caja helpers (para sumar ventas) ----
+async function getOpenCashBox(){ const boxes = await getAll('cash'); return boxes.find(b => !b.cierre); }
+function mapPagoKey(tipo){
+  const t = (tipo||'').toLowerCase();
+  if (t.includes('efectivo')) return 'efectivo';
+  if (t.includes('tarjeta')) return 'tarjeta';
+  if (t.includes('transfer')) return 'transferencia';
+  if (t.includes('qr') || t.includes('mp') || t.includes('mercado') || t.includes('pedido')) return 'qr';
+  return 'otros';
+}
+
+
+// ---- Boot ----
+document.querySelector('.tabs').onclick=e=>{ const b=e.target.closest('.tab'); if(!b)return; document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active')); b.classList.add('active'); currentView=b.dataset.v; renderGrid(); };
+document.getElementById('btnSalir').onclick=()=>{ location.href='index.html?v=235'; };
+document.getElementById('btnVentaRapida').onclick=()=>{ currentView='LLEVAR'; openOrder(null,null); };
+
+(async function boot(){
+  if ('serviceWorker' in navigator) {
+    try {
+      const EXPECTED = 'sw-v235.js';
+      const regs = await navigator.serviceWorker.getRegistrations();
+      const ok = regs.some(r => r.active?.scriptURL.includes(EXPECTED));
+      if (!ok) { await Promise.all(regs.map(r => r.unregister())); await navigator.serviceWorker.register(EXPECTED, { scope: './' }); }
+    } catch (e) { console.warn('SW no disponible:', e); }
+  }
+  await openDB();
+  await loadConfigMerged();
+
+  // demo products si vacío
+  const prods=await getAll('products'); if(prods.length===0){
+    for (const p of [
+      {id:'emp',nombre:'Empanadas',precio:2500,stock:50,categoria:'Entradas',trackStock:true},
+      {id:'pap',nombre:'Papas Fritas',precio:3000,stock:40,categoria:'Entradas',trackStock:true},
+      {id:'mil',nombre:'Milanesa',precio:7800,stock:0,categoria:'Platos',trackStock:false},
+      {id:'bur',nombre:'Hamburguesa',precio:6900,stock:0,categoria:'Platos',trackStock:false},
+      {id:'beb',nombre:'Gaseosa',precio:1900,stock:80,categoria:'Bebidas',trackStock:true},
+      {id:'cer',nombre:'Cerveza',precio:2500,stock:60,categoria:'Bebidas',trackStock:true}
+    ]) await put('products', p);
+  }
+  const mozos=await getAll('mozos'); if(mozos.length===0){
+    for (const m of [{id:'m1',nombre:'Laura',activo:true},{id:'m2',nombre:'Diego',activo:true},{id:'m3',nombre:'Pedro',activo:false}]) await put('mozos', m);
+  }
+  buildMesas(CONFIG.tables||20);
+  await renderGrid();
+})();
+
+
+
+// auto-refresh en pestaña Caja
+setInterval(()=>{ 
+  if(document.querySelector('.tab.active')?.dataset.v==='caja') renderCaja(); 
+}, 10000);
+
+</script>
+</body>
+</html>
