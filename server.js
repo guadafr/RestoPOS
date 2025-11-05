@@ -268,12 +268,31 @@ app.get('/api/cash/history', async (req,res)=>{
   res.json(list);
 });
 
-// —— Static opcional (si querés servir tus html/js desde acá) ——
-// app.use(express.static('./public'));
+// ====== Estáticos ======
+const path = require('path');
+const PUBLIC_DIR = __dirname; // mismos archivos que server.js
 
-const PORT = process.env.PORT || 10000; // Render usa este puerto por defecto
+// Servir archivos estáticos (HTML, JS, CSS, imágenes, etc.)
+app.use(express.static(PUBLIC_DIR, {
+  setHeaders: (res, f) => {
+    if (f.endsWith('.html')) res.setHeader('Cache-Control','no-cache');
+  }
+}));
+
+// Página principal
+app.get('/', (req, res) => {
+  res.sendFile(path.join(PUBLIC_DIR, 'index.html'));
+});
+
+// Rutas directas a otras vistas
+app.get(['/admin', '/admin.html'], (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'admin.html')));
+app.get(['/mozo', '/mozo.html'], (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'mozo.html')));
+app.get(['/cocina', '/cocina.html'], (req, res) => res.sendFile(path.join(PUBLIC_DIR, 'cocina.html')));
+
+// ====== Start ======
+const PORT = process.env.PORT || 10000; // Render asigna este puerto
 const HOST = '0.0.0.0';
 
 app.listen(PORT, HOST, () => {
-  console.log(`✅ RestoPOS listo en puerto ${PORT}`);
+  console.log(`✅ RestoPOS LAN listo en http://${HOST}:${PORT}`);
 });
