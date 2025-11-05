@@ -271,7 +271,9 @@ app.get('/api/cash/history', async (req,res)=>{
 // —— Static opcional (si querés servir tus html/js desde acá) ——
 // app.use(express.static('./public'));
 
-const PORT = 3000;
-initDB().then(()=>{
-  http.listen(PORT, ()=> console.log(`RestoPOS LAN listo en http://0.0.0.0:${PORT}`));
+const PORT = process.env.PORT || 10000; // Render usa este puerto por defecto
+const HOST = '0.0.0.0';
+
+app.listen(PORT, HOST, () => {
+  console.log(`✅ RestoPOS listo en puerto ${PORT}`);
 });
