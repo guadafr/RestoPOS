@@ -45,7 +45,7 @@ document.getElementById('btnAdmin').onclick=async()=>{
 if ('serviceWorker' in navigator) {
   (async () => {
     try {
-      const EXPECTED = 'sw-v235.js';
+      const EXPECTED = 'sw-v237.js';
       const regs = await navigator.serviceWorker.getRegistrations();
       const ok = regs.some(r => r.active?.scriptURL.includes(EXPECTED));
       if (!ok) {
